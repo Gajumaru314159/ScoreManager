@@ -16,12 +16,6 @@ const STORAGE_KEYS = {
   singleWidthPercent: "score-manager.single-width-percent.v1",
   scrollDirection: "score-manager.scroll-direction.v1",
 };
-const READER_PADDING = {
-  horizontal: 48,
-  top: 84,
-  bottom: 24,
-  gap: 20,
-};
 const READER_ZOOM = {
   min: 1,
   max: 4,
@@ -703,46 +697,75 @@ function createSpreadPlaceholder(referenceSheet) {
   return placeholder;
 }
 
-function calculateReaderScale(page) {
-  const baseViewport = page.getViewport({ scale: 1 });
+function getReaderLayoutMetrics() {
   const viewportWidth = Math.max(elements.readerViewport.clientWidth, 320);
   const viewportHeight = Math.max(elements.readerViewport.clientHeight, 320);
+  const pagesStyle = window.getComputedStyle(elements.readerPages);
+  const paddingInline =
+    (Number.parseFloat(pagesStyle.paddingLeft) || 0) +
+    (Number.parseFloat(pagesStyle.paddingRight) || 0);
+  const paddingBlock =
+    (Number.parseFloat(pagesStyle.paddingTop) || 0) +
+    (Number.parseFloat(pagesStyle.paddingBottom) || 0);
+  const columnGap = Number.parseFloat(pagesStyle.columnGap || pagesStyle.gap) || 0;
   const topbarHeight = 24;
 
+  return {
+    availableHeight: Math.max(viewportHeight - paddingBlock - topbarHeight, 180),
+    availableWidth: Math.max(viewportWidth - paddingInline, 220),
+    columnGap,
+  };
+}
+
+function getSpreadColumnCount() {
+  const gridTemplateColumns = window.getComputedStyle(elements.readerPages).gridTemplateColumns;
+  if (!gridTemplateColumns || gridTemplateColumns === "none") {
+    return 2;
+  }
+
+  const columns = gridTemplateColumns
+    .split(" ")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return Math.max(columns.length, 1);
+}
+
+function calculateReaderScale(page) {
+  const baseViewport = page.getViewport({ scale: 1 });
+  const { availableWidth, availableHeight, columnGap } = getReaderLayoutMetrics();
+
   if (state.mode === "scroll") {
-    const availableWidth = Math.max(viewportWidth - READER_PADDING.horizontal * 2, 280);
-    const availableHeight = Math.max(viewportHeight - topbarHeight - 24, 180);
     const widthScale = (availableWidth * (state.singleWidthPercent / 100)) / baseViewport.width;
+    const heightScale = availableHeight / baseViewport.height;
 
     if (state.scrollDirection === "horizontal") {
-      return (availableHeight / baseViewport.height) * state.readerZoom;
+      return heightScale * state.readerZoom;
     }
 
     if (state.singleLayout === "fit-width") {
       return widthScale * state.readerZoom;
     }
 
-    return (availableHeight / baseViewport.height) * state.readerZoom;
+    return heightScale * state.readerZoom;
   }
 
-  const availableHeight = Math.max(viewportHeight - topbarHeight - 24, 180);
   const heightScale = availableHeight / baseViewport.height;
+  const widthScale = availableWidth / baseViewport.width;
 
   if (state.mode === "spread") {
-    const availableWidthPerPage = Math.max((viewportWidth - READER_PADDING.horizontal * 2 - READER_PADDING.gap) / 2, 160);
-    const widthScale = availableWidthPerPage / baseViewport.width;
-    return Math.min(heightScale, widthScale) * state.readerZoom;
+    const spreadColumnCount = getSpreadColumnCount();
+    const totalGap = columnGap * Math.max(spreadColumnCount - 1, 0);
+    const availableWidthPerPage = Math.max((availableWidth - totalGap) / spreadColumnCount, 160);
+    return Math.min(heightScale, availableWidthPerPage / baseViewport.width) * state.readerZoom;
   }
 
   if (state.singleLayout === "fit-width") {
-    const availableWidth = Math.max(viewportWidth - READER_PADDING.horizontal * 2, 220);
-    const widthScale = (availableWidth * (state.singleWidthPercent / 100)) / baseViewport.width;
-    return Math.min(widthScale, heightScale) * state.readerZoom;
+    const fittedWidthScale = (availableWidth * (state.singleWidthPercent / 100)) / baseViewport.width;
+    return Math.min(fittedWidthScale, heightScale) * state.readerZoom;
   }
 
-  return heightScale * state.readerZoom;
+  return Math.min(heightScale, widthScale) * state.readerZoom;
 }
-
 function updatePageIndicator() {
   elements.pageIndicatorCurrent.textContent = state.currentPdf ? String(state.currentPage) : "-";
   elements.pageIndicatorTotal.textContent = state.currentPdf ? String(state.currentPdf.numPages) : "-";
