@@ -348,6 +348,10 @@ code {
   word-break: break-word;
 }
 
+.shelf-card--file .shelf-card__meta {
+  min-height: 22px;
+}
+
 .shelf-card__meta {
   display: flex;
   flex-wrap: wrap;
