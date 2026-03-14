@@ -43,6 +43,7 @@ const state = {
   libraryColumns: loadLibraryColumnCount(),
   libraryScrollTop: loadLibraryScrollTop(),
   readerZoom: READER_ZOOM.min,
+  readerRenderToken: 0,
   readerPanSession: null,
   urlSaveTimer: null,
 };
@@ -618,44 +619,56 @@ async function renderReader(options = {}) {
     return;
   }
 
-  if (state.currentPage > state.currentPdf.numPages) {
-    state.currentPage = state.currentPdf.numPages;
+  const currentPdf = state.currentPdf;
+  const renderToken = ++state.readerRenderToken;
+
+  if (state.currentPage > currentPdf.numPages) {
+    state.currentPage = currentPdf.numPages;
   }
 
   elements.readerViewport.dataset.mode = state.mode;
   elements.readerViewport.dataset.scrollDirection = state.scrollDirection;
   elements.readerPages.dataset.mode = state.mode;
   elements.readerPages.dataset.scrollDirection = state.scrollDirection;
-  elements.readerPages.innerHTML = "";
   applyReaderInteractionState();
-
-  if (!options.preserveScroll) {
-    elements.readerViewport.scrollTop = 0;
-    elements.readerViewport.scrollLeft = 0;
-  }
 
   let pageNumbers = [];
   if (state.mode === "single") {
     pageNumbers = [state.currentPage];
   } else if (state.mode === "spread") {
     const leftPage = state.currentPage % 2 === 0 ? state.currentPage - 1 : state.currentPage;
-    pageNumbers = [leftPage, leftPage + 1].filter((pageNumber) => pageNumber <= state.currentPdf.numPages);
+    pageNumbers = [leftPage, leftPage + 1].filter((pageNumber) => pageNumber <= currentPdf.numPages);
     state.currentPage = leftPage;
   } else {
-    pageNumbers = Array.from({ length: state.currentPdf.numPages }, (_, index) => index + 1);
+    pageNumbers = Array.from({ length: currentPdf.numPages }, (_, index) => index + 1);
   }
 
+  const nextSheets = [];
   let firstSheet = null;
   for (const pageNumber of pageNumbers) {
-    const sheet = await createReaderSheet(pageNumber);
+    const sheet = await createReaderSheet(currentPdf, pageNumber);
+    if (renderToken !== state.readerRenderToken) {
+      return;
+    }
     if (!firstSheet) {
       firstSheet = sheet;
     }
-    elements.readerPages.append(sheet);
+    nextSheets.push(sheet);
   }
 
   if (state.mode === "spread" && pageNumbers.length === 1 && firstSheet) {
-    elements.readerPages.append(createSpreadPlaceholder(firstSheet));
+    nextSheets.push(createSpreadPlaceholder(firstSheet));
+  }
+
+  if (renderToken !== state.readerRenderToken) {
+    return;
+  }
+
+  elements.readerPages.replaceChildren(...nextSheets);
+
+  if (!options.preserveScroll) {
+    elements.readerViewport.scrollTop = 0;
+    elements.readerViewport.scrollLeft = 0;
   }
 
   updateModeButtons();
@@ -664,8 +677,8 @@ async function renderReader(options = {}) {
   applyReaderInteractionState();
 }
 
-async function createReaderSheet(pageNumber) {
-  const page = await state.currentPdf.getPage(pageNumber);
+async function createReaderSheet(pdf, pageNumber) {
+  const page = await pdf.getPage(pageNumber);
   const scale = calculateReaderScale(page);
   const viewport = page.getViewport({ scale });
   const outputScale = window.devicePixelRatio || 1;
@@ -1446,6 +1459,7 @@ initialize();
  * @property {FileSystemFileHandle} fileHandle ファイルハンドル
  * @property {number | null} pageCount ページ数
  */
+
 
 
 
