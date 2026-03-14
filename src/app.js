@@ -36,7 +36,6 @@ const state = {
   scrollDirection: loadScrollDirection(),
   autoScrollTimer: null,
   autoScrollActive: false,
-  cachedThumbs: new Map(),
   metadata: createEmptyMetadata(),
   currentView: loadViewState(),
   historyReady: false,
@@ -515,14 +514,11 @@ function setLibraryColumns(columns) {
 
 function createShelfCard(entry) {
   const card = document.createElement("button");
-  card.className = "shelf-card";
+  card.className = `shelf-card ${entry.type === "folder" ? "shelf-card--folder" : "shelf-card--file"}`;
   card.type = "button";
 
-  const thumb = document.createElement("div");
-  thumb.className = "shelf-card__thumb";
-  thumb.textContent = entry.type === "folder" ? "Folder" : "PDF";
-
   const body = document.createElement("div");
+  body.className = "shelf-card__body";
 
   const title = document.createElement("div");
   title.className = "shelf-card__title";
@@ -530,56 +526,25 @@ function createShelfCard(entry) {
 
   const meta = document.createElement("div");
   meta.className = "shelf-card__meta";
-  meta.textContent =
-    entry.type === "folder"
-      ? `${entry.folders.length} folders / ${entry.scores.length} scores`
-      : entry.fileName;
 
+  if (entry.type === "folder") {
+    meta.textContent = `${entry.folders.length} folders / ${entry.scores.length} scores`;
+  } else if (getScoreMeta(entry).videoUrl) {
+    const badge = document.createElement("span");
+    badge.className = "shelf-card__badge";
+    badge.textContent = "動画あり";
+    meta.append(badge);
+  }
   body.append(title, meta);
-  card.append(thumb, body);
+  card.append(body);
 
   if (entry.type === "folder") {
     card.addEventListener("click", () => navigateToFolder(entry.pathSegments));
   } else {
     card.addEventListener("click", () => openScore(entry));
-    void attachThumbnail(entry, thumb);
   }
 
   return card;
-}
-
-
-async function attachThumbnail(score, thumbElement) {
-  const key = score.pathSegments.join("/");
-  if (state.cachedThumbs.has(key)) {
-    thumbElement.replaceChildren(createThumbnailImage(state.cachedThumbs.get(key), score.name));
-    return;
-  }
-
-  try {
-    const file = await score.fileHandle.getFile();
-    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-    score.pageCount = pdf.numPages;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 0.24 });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    const context = canvas.getContext("2d");
-    await page.render({ canvasContext: context, viewport }).promise;
-    const thumbnailUrl = canvas.toDataURL("image/png");
-    state.cachedThumbs.set(key, thumbnailUrl);
-    thumbElement.replaceChildren(createThumbnailImage(thumbnailUrl, score.name));
-  } catch (error) {
-    console.warn("サムネイル生成に失敗しました", score.fileName, error);
-  }
-}
-
-function createThumbnailImage(src, name) {
-  const image = document.createElement("img");
-  image.src = src;
-  image.alt = `${name} のサムネイル`;
-  return image;
 }
 
 async function openScore(score, options = {}) {
