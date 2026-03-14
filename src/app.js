@@ -36,7 +36,6 @@ const state = {
   scrollDirection: loadScrollDirection(),
   autoScrollTimer: null,
   autoScrollActive: false,
-  cachedThumbs: new Map(),
   metadata: createEmptyMetadata(),
   currentView: loadViewState(),
   historyReady: false,
@@ -517,11 +516,13 @@ function createShelfCard(entry) {
   card.className = "shelf-card";
   card.type = "button";
 
-  const thumb = document.createElement("div");
-  thumb.className = "shelf-card__thumb";
-  thumb.textContent = entry.type === "folder" ? "Folder" : "PDF";
+  const icon = document.createElement("div");
+  icon.className = "shelf-card__icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = entry.type === "folder" ? "📁" : "📄";
 
   const body = document.createElement("div");
+  body.className = "shelf-card__body";
 
   const title = document.createElement("div");
   title.className = "shelf-card__title";
@@ -535,50 +536,15 @@ function createShelfCard(entry) {
       : entry.fileName;
 
   body.append(title, meta);
-  card.append(thumb, body);
+  card.append(icon, body);
 
   if (entry.type === "folder") {
     card.addEventListener("click", () => navigateToFolder(entry.pathSegments));
   } else {
     card.addEventListener("click", () => openScore(entry));
-    void attachThumbnail(entry, thumb);
   }
 
   return card;
-}
-
-
-async function attachThumbnail(score, thumbElement) {
-  const key = score.pathSegments.join("/");
-  if (state.cachedThumbs.has(key)) {
-    thumbElement.replaceChildren(createThumbnailImage(state.cachedThumbs.get(key), score.name));
-    return;
-  }
-
-  try {
-    const file = await score.fileHandle.getFile();
-    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
-    score.pageCount = pdf.numPages;
-    const page = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 0.24 });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    const context = canvas.getContext("2d");
-    await page.render({ canvasContext: context, viewport }).promise;
-    const thumbnailUrl = canvas.toDataURL("image/png");
-    state.cachedThumbs.set(key, thumbnailUrl);
-    thumbElement.replaceChildren(createThumbnailImage(thumbnailUrl, score.name));
-  } catch (error) {
-    console.warn("サムネイル生成に失敗しました", score.fileName, error);
-  }
-}
-
-function createThumbnailImage(src, name) {
-  const image = document.createElement("img");
-  image.src = src;
-  image.alt = `${name} のサムネイル`;
-  return image;
 }
 
 async function openScore(score, options = {}) {
