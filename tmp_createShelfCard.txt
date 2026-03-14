@@ -1,0 +1,34 @@
+function createShelfCard(entry) {
+  const card = document.createElement("button");
+  card.className = "shelf-card";
+  card.type = "button";
+
+  const thumb = document.createElement("div");
+  thumb.className = "shelf-card__thumb";
+  thumb.textContent = entry.type === "folder" ? "Folder" : "PDF";
+
+  const body = document.createElement("div");
+
+  const title = document.createElement("div");
+  title.className = "shelf-card__title";
+  title.textContent = entry.name;
+
+  const meta = document.createElement("div");
+  meta.className = "shelf-card__meta";
+  meta.textContent =
+    entry.type === "folder"
+      ? `${entry.folders.length} folders / ${entry.scores.length} scores`
+      : entry.fileName;
+
+  body.append(title, meta);
+  card.append(thumb, body);
+
+  if (entry.type === "folder") {
+    card.addEventListener("click", () => navigateToFolder(entry.pathSegments));
+  } else {
+    card.addEventListener("click", () => openScore(entry));
+    void attachThumbnail(entry, thumb);
+  }
+
+  return card;
+}
