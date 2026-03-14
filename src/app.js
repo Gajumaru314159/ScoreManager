@@ -810,6 +810,34 @@ function changePage(delta) {
   void renderReader();
 }
 
+function jumpToReaderBoundary(direction) {
+  if (!state.currentPdf) {
+    return;
+  }
+
+  if (state.mode === "scroll") {
+    const isHorizontal = state.scrollDirection === "horizontal";
+    const target = direction < 0 ? 0 : (isHorizontal
+      ? elements.readerViewport.scrollWidth - elements.readerViewport.clientWidth
+      : elements.readerViewport.scrollHeight - elements.readerViewport.clientHeight);
+
+    elements.readerViewport.scrollTo({
+      left: isHorizontal ? Math.max(target, 0) : elements.readerViewport.scrollLeft,
+      top: isHorizontal ? elements.readerViewport.scrollTop : Math.max(target, 0),
+      behavior: "smooth",
+    });
+    window.setTimeout(syncScrollPageIndicator, 140);
+    return;
+  }
+
+  const targetPage = direction < 0 ? 1 : state.currentPdf.numPages;
+  if (targetPage === state.currentPage) {
+    return;
+  }
+
+  state.currentPage = targetPage;
+  void renderReader();
+}
 function handleKeyboardInput(event) {
   if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
     return;
@@ -824,6 +852,18 @@ function handleKeyboardInput(event) {
   if (event.key === "ArrowLeft" || event.key === "PageUp") {
     event.preventDefault();
     changePage(-1);
+    return;
+  }
+
+  if (event.key === "Home") {
+    event.preventDefault();
+    jumpToReaderBoundary(-1);
+    return;
+  }
+
+  if (event.key === "End") {
+    event.preventDefault();
+    jumpToReaderBoundary(1);
     return;
   }
 
@@ -843,11 +883,6 @@ function handleKeyboardInput(event) {
     closeReaderMenu();
   }
 }
-
-/**
- * @brief 楽譜ビューのズーム状態を初期化する
- * @returns {void}
- */
 function resetReaderZoom() {
   state.readerZoom = READER_ZOOM.min;
   cancelReaderPan();
