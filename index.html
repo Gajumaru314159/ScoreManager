@@ -80,12 +80,17 @@
             <p class="reader-menu__label">関連動画</p>
             <label class="field">
               <span>URL</span>
-              <input id="video-url-input" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+              <input id="video-url-input" type="url" />
             </label>
-            <div class="menu-actions">
-              <button id="save-video-url-button" class="button button--ghost" type="button">保存</button>
-              <button id="open-video-button" class="button button--ghost" type="button">開く</button>
-            </div>
+
+          </div>
+
+          <div class="reader-menu__section">
+            <p class="reader-menu__label">楽譜の購入先</p>
+            <label class="field">
+              <span>URL</span>
+              <input id="purchase-url-input" type="url" />
+            </label>
           </div>
 
           <div class="reader-menu__section">
@@ -148,3 +153,4 @@
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>
+

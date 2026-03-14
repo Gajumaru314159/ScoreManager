@@ -48,6 +48,7 @@ const state = {
   libraryColumns: loadLibraryColumnCount(),
   readerZoom: READER_ZOOM.min,
   readerPanSession: null,
+  urlSaveTimer: null,
 };
 
 const elements = {
@@ -80,8 +81,7 @@ const elements = {
   beatsPerPageInput: document.querySelector("#beats-per-page-input"),
   toggleAutoScrollButton: document.querySelector("#toggle-auto-scroll-button"),
   videoUrlInput: document.querySelector("#video-url-input"),
-  saveVideoUrlButton: document.querySelector("#save-video-url-button"),
-  openVideoButton: document.querySelector("#open-video-button"),
+  purchaseUrlInput: document.querySelector("#purchase-url-input"),
   touchZoneLeft: document.querySelector("#touch-zone-left"),
   touchZoneRight: document.querySelector("#touch-zone-right"),
   modeButtons: Array.from(document.querySelectorAll(".segmented-control__button[data-mode]")),
@@ -98,6 +98,7 @@ async function initialize() {
   applyView(state.currentView);
   initializeHistoryState();
   updateStatusLabels();
+  syncUrlControls();
   renderLibrary();
   await restoreRootHandle();
 }
@@ -113,8 +114,10 @@ function setupEvents() {
   elements.nextPageButton.addEventListener("click", () => changePage(1));
   elements.backToLibraryButton.addEventListener("click", () => navigateToLibrary());
   elements.toggleAutoScrollButton.addEventListener("click", toggleAutoScroll);
-  elements.saveVideoUrlButton.addEventListener("click", saveVideoUrl);
-  elements.openVideoButton.addEventListener("click", openVideoUrl);
+  elements.videoUrlInput.addEventListener("input", handleUrlInputChange);
+  elements.videoUrlInput.addEventListener("change", handleUrlInputCommit);
+  elements.purchaseUrlInput.addEventListener("input", handleUrlInputChange);
+  elements.purchaseUrlInput.addEventListener("change", handleUrlInputCommit);
   document.addEventListener("pointerdown", handleDocumentPointerDown);
   elements.touchZoneLeft.addEventListener("click", () => changePage(-1));
   elements.touchZoneRight.addEventListener("click", () => changePage(1));
@@ -569,6 +572,7 @@ function createThumbnailImage(src, name) {
 async function openScore(score, options = {}) {
   const { replaceHistory = false, skipHistory = false, page = 1, mode = state.mode } = options;
 
+  clearPendingUrlSave();
   stopAutoScroll();
   closeReaderMenu();
   state.currentScore = score;
@@ -579,6 +583,8 @@ async function openScore(score, options = {}) {
   elements.readerEmpty.classList.add("is-hidden");
   elements.readerViewport.classList.remove("is-hidden");
   elements.videoUrlInput.value = getScoreMeta(score).videoUrl ?? "";
+  elements.purchaseUrlInput.value = getScoreMeta(score).purchaseUrl ?? "";
+  syncUrlControls();
 
   try {
     const file = await score.fileHandle.getFile();
@@ -1028,19 +1034,53 @@ function stopAutoScroll() {
   elements.toggleAutoScrollButton.textContent = "自動スクロール開始";
 }
 
-async function saveVideoUrl() {
+function handleUrlInputChange() {
+  syncUrlControls();
+  scheduleUrlSave();
+}
+
+function handleUrlInputCommit() {
+  clearPendingUrlSave();
+  syncUrlControls();
+  void saveCurrentScoreUrls();
+}
+
+function clearPendingUrlSave() {
+  if (!state.urlSaveTimer) {
+    return;
+  }
+
+  window.clearTimeout(state.urlSaveTimer);
+  state.urlSaveTimer = null;
+}
+
+function scheduleUrlSave() {
+  clearPendingUrlSave();
+
+  state.urlSaveTimer = window.setTimeout(() => {
+    state.urlSaveTimer = null;
+    void saveCurrentScoreUrls();
+  }, 400);
+}
+
+async function saveCurrentScoreUrls() {
   if (!state.currentScore || !state.libraryRootHandle) {
     return;
   }
 
   const key = state.currentScore.pathSegments.join("/");
-  const value = elements.videoUrlInput.value.trim();
   state.metadata.scores[key] = {
     ...state.metadata.scores[key],
-    videoUrl: value,
+    videoUrl: elements.videoUrlInput.value.trim(),
+    purchaseUrl: elements.purchaseUrlInput.value.trim(),
   };
 
   await writeMetadata();
+}
+
+function syncUrlControls() {
+  const hasVideoUrl = Boolean(elements.videoUrlInput.value.trim());
+  elements.quickOpenVideoButton.disabled = !hasVideoUrl;
 }
 
 function openVideoUrl() {
@@ -1137,6 +1177,7 @@ function navigateToFolder(pathSegments, options = {}) {
  * @returns {void}
  */
 function navigateToLibrary(options = {}) {
+  clearPendingUrlSave();
   state.currentScore = null;
   state.currentPdf = null;
   resetReaderZoom();
