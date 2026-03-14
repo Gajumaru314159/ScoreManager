@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   currentFolderPath: "score-manager.current-folder-path.v2",
   view: "score-manager.view.v2",
   libraryColumns: "score-manager.library-columns.v1",
+  libraryScrollTop: "score-manager.library-scroll-top.v1",
   singleLayout: "score-manager.single-layout.v1",
   singleWidthPercent: "score-manager.single-width-percent.v1",
   scrollDirection: "score-manager.scroll-direction.v1",
@@ -46,6 +47,7 @@ const state = {
   currentView: loadViewState(),
   historyReady: false,
   libraryColumns: loadLibraryColumnCount(),
+  libraryScrollTop: loadLibraryScrollTop(),
   readerZoom: READER_ZOOM.min,
   readerPanSession: null,
   urlSaveTimer: null,
@@ -180,6 +182,13 @@ function setupEvents() {
       void renderReader();
     }
   });
+  window.addEventListener("scroll", () => {
+    if (state.currentView !== "library") {
+      return;
+    }
+
+    captureLibraryScrollPosition();
+  }, { passive: true });
   window.addEventListener("popstate", (event) => {
     void handlePopState(event);
   });
@@ -221,6 +230,11 @@ function loadSingleLayout() {
   return value === "fit-width" ? "fit-width" : "fit-height";
 }
 
+function loadLibraryScrollTop() {
+  const value = Number(localStorage.getItem(STORAGE_KEYS.libraryScrollTop) ?? 0);
+  return Number.isFinite(value) ? Math.max(value, 0) : 0;
+}
+
 function loadSingleWidthPercent() {
   const value = Number(localStorage.getItem(STORAGE_KEYS.singleWidthPercent) ?? 92);
   return Number.isFinite(value) ? clamp(value, 40, 100) : 92;
@@ -245,6 +259,10 @@ function persistViewState(view) {
  */
 function persistLibraryColumnCount() {
   localStorage.setItem(STORAGE_KEYS.libraryColumns, String(state.libraryColumns));
+}
+
+function persistLibraryScrollTop() {
+  localStorage.setItem(STORAGE_KEYS.libraryScrollTop, String(state.libraryScrollTop));
 }
 
 /**
@@ -575,6 +593,7 @@ async function openScore(score, options = {}) {
   clearPendingUrlSave();
   stopAutoScroll();
   closeReaderMenu();
+  captureLibraryScrollPosition();
   state.currentScore = score;
   state.currentPage = page;
   state.mode = mode;
@@ -1097,6 +1116,7 @@ function getScoreMeta(score) {
 }
 
 function applyView(view) {
+  const previousView = state.currentView;
   state.currentView = view;
   persistViewState(view);
 
@@ -1108,6 +1128,10 @@ function applyView(view) {
   if (view !== "reader") {
     closeReaderMenu();
     stopAutoScroll();
+  }
+
+  if (view === "library" && previousView !== "library") {
+    restoreLibraryScrollPosition();
   }
 }
 
@@ -1131,7 +1155,7 @@ function syncHistoryState(options = {}) {
 
 /**
  * @brief 現在状態の履歴スナップショットを生成する
- * @returns {{view:"library"|"reader", currentFolderPath:string[], scorePath:string[]|null, readerPage:number, mode:"single"|"spread"|"scroll", scrollDirection:"vertical"|"horizontal"}}
+ * @returns {{view:"library"|"reader", currentFolderPath:string[], scorePath:string[]|null, readerPage:number, mode:"single"|"spread"|"scroll", scrollDirection:"vertical"|"horizontal", libraryScrollTop:number}}
  */
 function createHistorySnapshot() {
   return {
@@ -1141,6 +1165,7 @@ function createHistorySnapshot() {
     readerPage: state.currentPage,
     mode: state.mode,
     scrollDirection: state.scrollDirection,
+    libraryScrollTop: state.libraryScrollTop,
   };
 }
 
@@ -1161,11 +1186,15 @@ function initializeHistoryState() {
  */
 function navigateToFolder(pathSegments, options = {}) {
   state.currentFolderPath = [...pathSegments];
+  state.libraryScrollTop = 0;
+  persistLibraryScrollTop();
   persistCurrentFolderPath();
   renderLibrary();
 
   if (state.currentView !== "library") {
     applyView("library");
+  } else {
+    restoreLibraryScrollPosition();
   }
 
   syncHistoryState(options);
@@ -1198,6 +1227,10 @@ async function handlePopState(event) {
   }
 
   state.currentFolderPath = Array.isArray(historyState.currentFolderPath) ? [...historyState.currentFolderPath] : [];
+  state.libraryScrollTop = Number.isFinite(historyState.libraryScrollTop)
+    ? Math.max(historyState.libraryScrollTop, 0)
+    : 0;
+  persistLibraryScrollTop();
   persistCurrentFolderPath();
   state.mode = historyState.mode === "spread" || historyState.mode === "scroll" ? historyState.mode : "single";
   state.scrollDirection = historyState.scrollDirection === "horizontal"
@@ -1223,6 +1256,26 @@ async function handlePopState(event) {
   state.currentScore = null;
   state.currentPdf = null;
   applyView("library");
+}
+
+/**
+ * @brief 本棚画面のスクロール位置を保存する
+ * @returns {void}
+ */
+function captureLibraryScrollPosition() {
+  state.libraryScrollTop = Math.max(window.scrollY, 0);
+  persistLibraryScrollTop();
+}
+
+/**
+ * @brief 本棚画面のスクロール位置を復元する
+ * @returns {void}
+ */
+function restoreLibraryScrollPosition() {
+  const scrollTop = Math.max(state.libraryScrollTop, 0);
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+  });
 }
 
 function toggleReaderMenu() {
@@ -1335,6 +1388,16 @@ initialize();
  * @property {FileSystemFileHandle} fileHandle ファイルハンドル
  * @property {number | null} pageCount ページ数
  */
+
+
+
+
+
+
+
+
+
+
 
 
 
