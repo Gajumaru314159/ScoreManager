@@ -27,7 +27,6 @@
               </div>
             </div>
             <button id="pick-directory-button" class="button button--primary" type="button">楽譜フォルダを選択</button>
-            <button id="open-settings-button" class="button button--ghost" type="button">設定</button>
           </div>
         </section>
 
@@ -43,11 +42,15 @@
 
         <div class="reader-overlay reader-overlay--right">
           <div class="page-indicator"><span id="page-indicator-current">-</span><span>/</span><span id="page-indicator-total">-</span></div>
-          <button id="reader-menu-button" class="icon-button" type="button" aria-label="メニューを開く">☰</button>
+          <button id="reader-menu-button" class="button button--ghost button--compact reader-settings-button" type="button" aria-label="設定を開く">設定</button>
         </div>
 
         <aside id="reader-menu" class="reader-menu" hidden>
-          <h2 id="reader-title" class="reader-menu__title">楽譜を選択してください</h2>
+          <div class="reader-menu__header">
+            <h2 id="reader-title" class="reader-menu__title">楽譜を選択してください</h2>
+            <button id="close-reader-menu-button" class="button button--ghost button--compact" type="button">閉じる</button>
+          </div>
+
           <div class="reader-menu__section">
             <p class="reader-menu__label">表示モード</p>
             <div class="segmented-control" role="group" aria-label="表示モード">
@@ -106,8 +109,27 @@
               <button id="prev-page-button" class="button button--ghost" type="button">前へ</button>
               <button id="next-page-button" class="button button--ghost" type="button">次へ</button>
             </div>
+          </div>
+
+          <div class="reader-menu__section">
+            <p class="reader-menu__label">ライブラリ</p>
+            <dl class="settings-list">
+              <div>
+                <dt>ルートフォルダ</dt>
+                <dd id="settings-root-folder">未選択</dd>
+              </div>
+              <div>
+                <dt>現在のカテゴリ</dt>
+                <dd id="settings-current-folder">未選択</dd>
+              </div>
+              <div>
+                <dt>データファイル</dt>
+                <dd>.score-manager-data.json</dd>
+              </div>
+            </dl>
             <div class="menu-actions">
-              <button id="open-settings-from-reader-button" class="button button--ghost" type="button">設定</button>
+              <button id="change-root-button" class="button button--primary" type="button">ルートフォルダを変更</button>
+              <button id="reopen-library-button" class="button button--ghost" type="button">本棚へ戻る</button>
             </div>
           </div>
         </aside>
@@ -121,59 +143,8 @@
           </div>
         </div>
       </section>
-
-      <section id="settings-page" class="page settings-page" aria-labelledby="settings-title" hidden>
-        <header class="settings-header">
-          <div>
-            <p class="eyebrow">Settings</p>
-            <h2 id="settings-title">設定</h2>
-          </div>
-          <button id="close-settings-button" class="button button--ghost" type="button">戻る</button>
-        </header>
-
-        <div class="settings-card">
-          <h3>保存方式</h3>
-          <p>楽譜ごとの動画 URL は、選択したルートフォルダ内の <code>.score-manager-data.json</code> に保存します。</p>
-          <p>軽量な状態として、現在開いているカテゴリはブラウザの localStorage に保存します。</p>
-          <p>ルートフォルダへの再接続には、ブラウザの IndexedDB にディレクトリハンドルを保存します。</p>
-        </div>
-
-        <div class="settings-card">
-          <h3>現在の状態</h3>
-          <dl class="settings-list">
-            <div>
-              <dt>ルートフォルダ</dt>
-              <dd id="settings-root-folder">未選択</dd>
-            </div>
-            <div>
-              <dt>現在のカテゴリ</dt>
-              <dd id="settings-current-folder">未選択</dd>
-            </div>
-            <div>
-              <dt>データファイル</dt>
-              <dd>.score-manager-data.json</dd>
-            </div>
-          </dl>
-          <div class="menu-actions">
-            <button id="change-root-button" class="button button--primary" type="button">ルートフォルダを変更</button>
-            <button id="reopen-library-button" class="button button--ghost" type="button">本棚へ</button>
-          </div>
-        </div>
-
-        <div class="settings-card">
-          <h3>操作メモ</h3>
-          <ul class="hint-list">
-            <li>右端タップ / ArrowRight / PageDown: 次へ</li>
-            <li>左端タップ / ArrowLeft / PageUp: 戻る</li>
-            <li>Space: スクロール自動送りの開始 / 停止</li>
-            <li>1 2 3: 単ページ / 見開き / スクロール</li>
-          </ul>
-        </div>
-      </section>
     </div>
 
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>
-
-

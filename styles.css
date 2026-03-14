@@ -126,8 +126,7 @@ code {
 }
 
 .library-hero,
-.library-grid,
-.settings-card {
+.library-grid {
   width: min(1480px, calc(100vw - 48px));
   margin-inline: auto;
 }
@@ -321,9 +320,23 @@ code {
   backdrop-filter: blur(18px);
 }
 
+.reader-menu__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
 .reader-menu__title {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 1rem;
+}
+
+.reader-settings-button {
+  min-width: 72px;
+  background: rgba(255, 248, 237, 0.9);
+  color: var(--text);
 }
 
 .reader-menu__section + .reader-menu__section {
@@ -501,36 +514,6 @@ code {
   float: right;
 }
 
-.settings-page {
-  padding: 28px 0;
-}
-
-.settings-header,
-.settings-card {
-  width: min(920px, calc(100vw - 48px));
-  margin-inline: auto;
-}
-
-.settings-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.settings-card + .settings-card {
-  margin-top: 16px;
-}
-
-.settings-card h3 {
-  margin-bottom: 12px;
-}
-
-.settings-card p + p {
-  margin-top: 10px;
-}
-
 .settings-list {
   margin: 0 0 16px;
 }
@@ -584,7 +567,7 @@ code {
 
 @media (max-width: 720px) {
   .library-hero,
-  .settings-header {
+  .reader-menu__header {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -38,7 +38,6 @@ const state = {
   cachedThumbs: new Map(),
   metadata: createEmptyMetadata(),
   currentView: loadViewState(),
-  settingsReturnView: "library",
   historyReady: false,
   libraryColumns: loadLibraryColumnCount(),
 };
@@ -47,14 +46,11 @@ const elements = {
   pages: {
     library: document.querySelector("#library-page"),
     reader: document.querySelector("#reader-page"),
-    settings: document.querySelector("#settings-page"),
   },
   pickDirectoryButton: document.querySelector("#pick-directory-button"),
-  openSettingsButton: document.querySelector("#open-settings-button"),
-  closeSettingsButton: document.querySelector("#close-settings-button"),
   changeRootButton: document.querySelector("#change-root-button"),
   reopenLibraryButton: document.querySelector("#reopen-library-button"),
-  openSettingsFromReaderButton: document.querySelector("#open-settings-from-reader-button"),
+  closeReaderMenuButton: document.querySelector("#close-reader-menu-button"),
   settingsRootFolder: document.querySelector("#settings-root-folder"),
   settingsCurrentFolder: document.querySelector("#settings-current-folder"),
   breadcrumb: document.querySelector("#breadcrumb"),
@@ -100,12 +96,10 @@ async function initialize() {
 
 function setupEvents() {
   elements.pickDirectoryButton.addEventListener("click", handlePickDirectory);
-  elements.openSettingsButton.addEventListener("click", () => openSettings("library"));
-  elements.closeSettingsButton.addEventListener("click", closeSettings);
   elements.changeRootButton.addEventListener("click", handlePickDirectory);
   elements.reopenLibraryButton.addEventListener("click", () => navigateToLibrary());
-  elements.openSettingsFromReaderButton.addEventListener("click", () => openSettings("reader"));
   elements.readerMenuButton.addEventListener("click", (event) => { event.stopPropagation(); toggleReaderMenu(); });
+  elements.closeReaderMenuButton.addEventListener("click", closeReaderMenu);
   elements.quickOpenVideoButton.addEventListener("click", openVideoUrl);
   elements.prevPageButton.addEventListener("click", () => changePage(-1));
   elements.nextPageButton.addEventListener("click", () => changePage(1));
@@ -194,7 +188,7 @@ function loadCurrentFolderPath() {
 
 function loadViewState() {
   const value = localStorage.getItem(STORAGE_KEYS.view);
-  return value === "reader" || value === "settings" ? value : "library";
+  return value === "reader" ? value : "library";
 }
 
 /**
@@ -779,11 +773,7 @@ function handleKeyboardInput(event) {
   } else if (event.key === "3") {
     switchMode("scroll");
   } else if (event.key === "Escape") {
-    if (state.currentView === "settings") {
-      closeSettings();
-    } else {
-      closeReaderMenu();
-    }
+    closeReaderMenu();
   }
 }
 
@@ -930,13 +920,12 @@ function syncHistoryState(options = {}) {
 
 /**
  * @brief 現在状態の履歴スナップショットを生成する
- * @returns {{view:"library"|"reader"|"settings", currentFolderPath:string[], settingsReturnView:"library"|"reader", scorePath:string[]|null, readerPage:number, mode:"single"|"spread"|"scroll", scrollDirection:"vertical"|"horizontal"}}
+ * @returns {{view:"library"|"reader", currentFolderPath:string[], scorePath:string[]|null, readerPage:number, mode:"single"|"spread"|"scroll", scrollDirection:"vertical"|"horizontal"}}
  */
 function createHistorySnapshot() {
   return {
     view: state.currentView,
     currentFolderPath: [...state.currentFolderPath],
-    settingsReturnView: state.settingsReturnView,
     scorePath: state.currentScore ? [...state.currentScore.pathSegments] : null,
     readerPage: state.currentPage,
     mode: state.mode,
@@ -983,23 +972,6 @@ function navigateToLibrary(options = {}) {
   syncHistoryState(options);
 }
 
-function openSettings(returnView) {
-  state.settingsReturnView = returnView;
-  updateStatusLabels();
-  applyView("settings");
-  syncHistoryState();
-}
-
-function closeSettings() {
-  if (state.settingsReturnView === "reader" && state.currentScore) {
-    applyView("reader");
-    syncHistoryState();
-    return;
-  }
-
-  navigateToLibrary();
-}
-
 /**
  * @brief ブラウザの戻る/進む操作に合わせて状態を復元する
  * @param {PopStateEvent} event 履歴イベント
@@ -1014,7 +986,6 @@ async function handlePopState(event) {
 
   state.currentFolderPath = Array.isArray(historyState.currentFolderPath) ? [...historyState.currentFolderPath] : [];
   persistCurrentFolderPath();
-  state.settingsReturnView = historyState.settingsReturnView === "reader" ? "reader" : "library";
   state.mode = historyState.mode === "spread" || historyState.mode === "scroll" ? historyState.mode : "single";
   state.scrollDirection = historyState.scrollDirection === "horizontal"
     ? "horizontal"
@@ -1038,10 +1009,18 @@ async function handlePopState(event) {
 
   state.currentScore = null;
   state.currentPdf = null;
-  applyView(historyState.view === "settings" ? "settings" : "library");
+  applyView("library");
 }
 
 function toggleReaderMenu() {
+  if (state.currentView !== "reader") {
+    return;
+  }
+
+  if (elements.readerMenu.hidden) {
+    updateStatusLabels();
+  }
+
   elements.readerMenu.hidden = !elements.readerMenu.hidden;
 }
 
