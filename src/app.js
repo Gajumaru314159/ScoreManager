@@ -513,13 +513,8 @@ function setLibraryColumns(columns) {
 
 function createShelfCard(entry) {
   const card = document.createElement("button");
-  card.className = "shelf-card";
+  card.className = `shelf-card ${entry.type === "folder" ? "shelf-card--folder" : "shelf-card--file"}`;
   card.type = "button";
-
-  const icon = document.createElement("div");
-  icon.className = "shelf-card__icon";
-  icon.setAttribute("aria-hidden", "true");
-  icon.textContent = entry.type === "folder" ? "📁" : "📄";
 
   const body = document.createElement("div");
   body.className = "shelf-card__body";
@@ -530,13 +525,25 @@ function createShelfCard(entry) {
 
   const meta = document.createElement("div");
   meta.className = "shelf-card__meta";
-  meta.textContent =
-    entry.type === "folder"
-      ? `${entry.folders.length} folders / ${entry.scores.length} scores`
-      : entry.fileName;
+
+  if (entry.type === "folder") {
+    meta.textContent = `${entry.folders.length} folders / ${entry.scores.length} scores`;
+  } else {
+    const fileName = document.createElement("span");
+    fileName.className = "shelf-card__file-name";
+    fileName.textContent = entry.fileName;
+    meta.append(fileName);
+
+    if (getScoreMeta(entry).videoUrl) {
+      const badge = document.createElement("span");
+      badge.className = "shelf-card__badge";
+      badge.textContent = "動画あり";
+      meta.append(badge);
+    }
+  }
 
   body.append(title, meta);
-  card.append(icon, body);
+  card.append(body);
 
   if (entry.type === "folder") {
     card.addEventListener("click", () => navigateToFolder(entry.pathSegments));
