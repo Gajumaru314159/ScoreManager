@@ -21,6 +21,12 @@ const READER_PADDING = {
   bottom: 24,
   gap: 20,
 };
+const READER_ZOOM = {
+  min: 1,
+  max: 4,
+  step: 0.1,
+  dragThreshold: 6,
+};
 
 const state = {
   libraryRootHandle: null,
@@ -40,6 +46,8 @@ const state = {
   currentView: loadViewState(),
   historyReady: false,
   libraryColumns: loadLibraryColumnCount(),
+  readerZoom: READER_ZOOM.min,
+  readerPanSession: null,
 };
 
 const elements = {
@@ -156,6 +164,11 @@ function setupEvents() {
       syncScrollPageIndicator();
     }
   });
+  elements.readerViewport.addEventListener("wheel", handleReaderWheelZoom, { passive: false });
+  elements.readerViewport.addEventListener("pointerdown", handleReaderPointerDown);
+  elements.readerViewport.addEventListener("pointermove", handleReaderPointerMove);
+  elements.readerViewport.addEventListener("pointerup", handleReaderPointerUp);
+  elements.readerViewport.addEventListener("pointercancel", handleReaderPointerUp);
 
   window.addEventListener("keydown", handleKeyboardInput);
   window.addEventListener("beforeunload", stopAutoScroll);
@@ -561,6 +574,7 @@ async function openScore(score, options = {}) {
   state.currentScore = score;
   state.currentPage = page;
   state.mode = mode;
+  resetReaderZoom();
   elements.readerTitle.textContent = score.name;
   elements.readerEmpty.classList.add("is-hidden");
   elements.readerViewport.classList.remove("is-hidden");
@@ -579,7 +593,7 @@ async function openScore(score, options = {}) {
   }
 }
 
-async function renderReader() {
+async function renderReader(options = {}) {
   if (!state.currentPdf) {
     updatePageIndicator();
     return;
@@ -594,8 +608,12 @@ async function renderReader() {
   elements.readerPages.dataset.mode = state.mode;
   elements.readerPages.dataset.scrollDirection = state.scrollDirection;
   elements.readerPages.innerHTML = "";
-  elements.readerViewport.scrollTop = 0;
-  elements.readerViewport.scrollLeft = 0;
+  applyReaderInteractionState();
+
+  if (!options.preserveScroll) {
+    elements.readerViewport.scrollTop = 0;
+    elements.readerViewport.scrollLeft = 0;
+  }
 
   let pageNumbers = [];
   if (state.mode === "single") {
@@ -624,6 +642,7 @@ async function renderReader() {
   updateModeButtons();
   syncScrollLayoutControls();
   updatePageIndicator();
+  applyReaderInteractionState();
 }
 
 async function createReaderSheet(pageNumber) {
@@ -671,14 +690,14 @@ function calculateReaderScale(page) {
     const widthScale = (availableWidth * (state.singleWidthPercent / 100)) / baseViewport.width;
 
     if (state.scrollDirection === "horizontal") {
-      return availableHeight / baseViewport.height;
+      return (availableHeight / baseViewport.height) * state.readerZoom;
     }
 
     if (state.singleLayout === "fit-width") {
-      return widthScale;
+      return widthScale * state.readerZoom;
     }
 
-    return availableHeight / baseViewport.height;
+    return (availableHeight / baseViewport.height) * state.readerZoom;
   }
 
   const availableHeight = Math.max(viewportHeight - topbarHeight - 24, 180);
@@ -687,16 +706,16 @@ function calculateReaderScale(page) {
   if (state.mode === "spread") {
     const availableWidthPerPage = Math.max((viewportWidth - READER_PADDING.horizontal * 2 - READER_PADDING.gap) / 2, 160);
     const widthScale = availableWidthPerPage / baseViewport.width;
-    return Math.min(heightScale, widthScale);
+    return Math.min(heightScale, widthScale) * state.readerZoom;
   }
 
   if (state.singleLayout === "fit-width") {
     const availableWidth = Math.max(viewportWidth - READER_PADDING.horizontal * 2, 220);
     const widthScale = (availableWidth * (state.singleWidthPercent / 100)) / baseViewport.width;
-    return Math.min(widthScale, heightScale);
+    return Math.min(widthScale, heightScale) * state.readerZoom;
   }
 
-  return heightScale;
+  return heightScale * state.readerZoom;
 }
 
 function updatePageIndicator() {
@@ -775,6 +794,158 @@ function handleKeyboardInput(event) {
   } else if (event.key === "Escape") {
     closeReaderMenu();
   }
+}
+
+/**
+ * @brief 楽譜ビューのズーム状態を初期化する
+ * @returns {void}
+ */
+function resetReaderZoom() {
+  state.readerZoom = READER_ZOOM.min;
+  cancelReaderPan();
+  applyReaderInteractionState();
+}
+
+/**
+ * @brief ズーム状態に応じた閲覧 UI を反映する
+ * @returns {void}
+ */
+function applyReaderInteractionState() {
+  const isZoomed = state.readerZoom > READER_ZOOM.min;
+  elements.readerViewport.classList.toggle("reader-viewport--zoomed", isZoomed);
+  elements.readerViewport.classList.toggle("reader-viewport--dragging", Boolean(state.readerPanSession));
+  elements.readerViewport.style.overflow = isZoomed ? "auto" : "";
+}
+
+/**
+ * @brief Ctrl + ホイールで楽譜をズームする
+ * @param {WheelEvent} event ホイールイベント
+ * @returns {void}
+ */
+function handleReaderWheelZoom(event) {
+  if (!event.ctrlKey || state.currentView !== "reader" || !state.currentPdf) {
+    return;
+  }
+
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1 + READER_ZOOM.step : 1 / (1 + READER_ZOOM.step);
+  const nextZoom = clamp(Number((state.readerZoom * factor).toFixed(3)), READER_ZOOM.min, READER_ZOOM.max);
+  if (nextZoom === state.readerZoom) {
+    return;
+  }
+
+  const anchor = {
+    centerX: elements.readerViewport.scrollLeft + elements.readerViewport.clientWidth / 2,
+    centerY: elements.readerViewport.scrollTop + elements.readerViewport.clientHeight / 2,
+    width: Math.max(elements.readerViewport.scrollWidth, 1),
+    height: Math.max(elements.readerViewport.scrollHeight, 1),
+  };
+
+  state.readerZoom = nextZoom;
+  applyReaderInteractionState();
+  void rerenderReaderWithAnchor(anchor);
+}
+
+/**
+ * @brief ズーム変更後にスクロール位置を補正しながら再描画する
+ * @param {{centerX:number, centerY:number, width:number, height:number}} anchor 再描画前の基準点
+ * @returns {Promise<void>}
+ */
+async function rerenderReaderWithAnchor(anchor) {
+  await renderReader({ preserveScroll: true });
+
+  const maxScrollLeft = Math.max(elements.readerViewport.scrollWidth - elements.readerViewport.clientWidth, 0);
+  const maxScrollTop = Math.max(elements.readerViewport.scrollHeight - elements.readerViewport.clientHeight, 0);
+  const nextCenterX = (anchor.centerX / anchor.width) * elements.readerViewport.scrollWidth;
+  const nextCenterY = (anchor.centerY / anchor.height) * elements.readerViewport.scrollHeight;
+  elements.readerViewport.scrollLeft = clamp(nextCenterX - elements.readerViewport.clientWidth / 2, 0, maxScrollLeft);
+  elements.readerViewport.scrollTop = clamp(nextCenterY - elements.readerViewport.clientHeight / 2, 0, maxScrollTop);
+}
+
+/**
+ * @brief ズーム中のドラッグスクロールを開始する
+ * @param {PointerEvent} event ポインターイベント
+ * @returns {void}
+ */
+function handleReaderPointerDown(event) {
+  if (event.button !== 0 || state.currentView !== "reader" || state.readerZoom <= READER_ZOOM.min) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement) || target.closest("button, input, .reader-menu")) {
+    return;
+  }
+
+  state.readerPanSession = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startScrollLeft: elements.readerViewport.scrollLeft,
+    startScrollTop: elements.readerViewport.scrollTop,
+    moved: false,
+  };
+  elements.readerViewport.setPointerCapture(event.pointerId);
+  applyReaderInteractionState();
+}
+
+/**
+ * @brief ズーム中のドラッグスクロールを処理する
+ * @param {PointerEvent} event ポインターイベント
+ * @returns {void}
+ */
+function handleReaderPointerMove(event) {
+  if (!state.readerPanSession || state.readerPanSession.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const deltaX = event.clientX - state.readerPanSession.startX;
+  const deltaY = event.clientY - state.readerPanSession.startY;
+  if (!state.readerPanSession.moved && Math.hypot(deltaX, deltaY) >= READER_ZOOM.dragThreshold) {
+    state.readerPanSession.moved = true;
+  }
+
+  if (!state.readerPanSession.moved) {
+    return;
+  }
+
+  event.preventDefault();
+  elements.readerViewport.scrollLeft = state.readerPanSession.startScrollLeft - deltaX;
+  elements.readerViewport.scrollTop = state.readerPanSession.startScrollTop - deltaY;
+}
+
+/**
+ * @brief ズーム中のドラッグスクロールを終了する
+ * @param {PointerEvent} event ポインターイベント
+ * @returns {void}
+ */
+function handleReaderPointerUp(event) {
+  if (!state.readerPanSession || state.readerPanSession.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const { moved } = state.readerPanSession;
+  cancelReaderPan();
+  if (moved) {
+    event.preventDefault();
+  }
+}
+
+/**
+ * @brief 進行中のドラッグセッションを解除する
+ * @returns {void}
+ */
+function cancelReaderPan() {
+  if (state.readerPanSession) {
+    try {
+      elements.readerViewport.releasePointerCapture(state.readerPanSession.pointerId);
+    } catch {
+      // pointer capture が未取得でも処理継続
+    }
+  }
+
+  state.readerPanSession = null;
+  applyReaderInteractionState();
 }
 
 function syncScrollPageIndicator() {
@@ -968,6 +1139,7 @@ function navigateToFolder(pathSegments, options = {}) {
 function navigateToLibrary(options = {}) {
   state.currentScore = null;
   state.currentPdf = null;
+  resetReaderZoom();
   applyView("library");
   syncHistoryState(options);
 }

@@ -418,6 +418,16 @@ code {
 .reader-viewport {
   position: relative;
   overflow: hidden;
+  touch-action: pan-x pan-y;
+}
+
+.reader-viewport--zoomed {
+  cursor: grab;
+  touch-action: none;
+}
+
+.reader-viewport--dragging {
+  cursor: grabbing;
 }
 
 .reader-viewport[data-mode="scroll"][data-scroll-direction="vertical"] {
@@ -490,6 +500,10 @@ code {
   visibility: hidden;
   background: transparent;
   box-shadow: none;
+  pointer-events: none;
+}
+
+.reader-viewport--zoomed .touch-zone {
   pointer-events: none;
 }
 
