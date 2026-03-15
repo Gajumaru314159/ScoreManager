@@ -45,6 +45,7 @@ const state = {
   readerZoom: READER_ZOOM.min,
   readerRenderToken: 0,
   readerPanSession: null,
+  readerPinchSession: null,
   urlSaveTimer: null,
 };
 
@@ -173,6 +174,10 @@ function setupEvents() {
   elements.readerViewport.addEventListener("pointermove", handleReaderPointerMove);
   elements.readerViewport.addEventListener("pointerup", handleReaderPointerUp);
   elements.readerViewport.addEventListener("pointercancel", handleReaderPointerUp);
+  elements.readerViewport.addEventListener("touchstart", handleReaderTouchStart, { passive: false });
+  elements.readerViewport.addEventListener("touchmove", handleReaderTouchMove, { passive: false });
+  elements.readerViewport.addEventListener("touchend", handleReaderTouchEnd, { passive: false });
+  elements.readerViewport.addEventListener("touchcancel", handleReaderTouchEnd, { passive: false });
 
   window.addEventListener("keydown", handleKeyboardInput);
   window.addEventListener("beforeunload", stopAutoScroll);
@@ -872,6 +877,7 @@ function handleKeyboardInput(event) {
 }
 function resetReaderZoom() {
   state.readerZoom = READER_ZOOM.min;
+  cancelReaderPinch();
   cancelReaderPan();
   applyReaderInteractionState();
 }
@@ -917,6 +923,179 @@ function handleReaderWheelZoom(event) {
 }
 
 /**
+ * @brief タッチ座標から現在の表示位置を保つためのアンカーを作成する
+ * @param {TouchList} touches タッチ一覧
+ * @returns {{centerX:number, centerY:number, width:number, height:number}}
+ */
+function createReaderAnchorFromTouches(touches) {
+  const center = getTouchCenter(touches);
+  const viewportRect = elements.readerViewport.getBoundingClientRect();
+
+  return {
+    centerX: elements.readerViewport.scrollLeft + center.x - viewportRect.left,
+    centerY: elements.readerViewport.scrollTop + center.y - viewportRect.top,
+    width: Math.max(elements.readerViewport.scrollWidth, 1),
+    height: Math.max(elements.readerViewport.scrollHeight, 1),
+  };
+}
+
+/**
+ * @brief 二本指の中心座標を取得する
+ * @param {TouchList} touches タッチ一覧
+ * @returns {{x:number, y:number}}
+ */
+function getTouchCenter(touches) {
+  const first = touches[0];
+  const second = touches[1];
+  return {
+    x: (first.clientX + second.clientX) / 2,
+    y: (first.clientY + second.clientY) / 2,
+  };
+}
+
+/**
+ * @brief 二本指間の距離を取得する
+ * @param {TouchList} touches タッチ一覧
+ * @returns {number}
+ */
+function getTouchDistance(touches) {
+  const first = touches[0];
+  const second = touches[1];
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+}
+
+/**
+ * @brief ピンチズーム開始時の状態を初期化する
+ * @param {TouchList} touches タッチ一覧
+ * @returns {void}
+ */
+function beginReaderPinch(touches) {
+  const startDistance = getTouchDistance(touches);
+  if (startDistance <= 0) {
+    return;
+  }
+
+  cancelReaderPan();
+  state.readerPinchSession = {
+    startDistance,
+    startZoom: state.readerZoom,
+    lastAppliedZoom: state.readerZoom,
+    pendingZoom: null,
+    pendingAnchor: null,
+    rendering: false,
+  };
+}
+
+/**
+ * @brief ピンチズームの開始を処理する
+ * @param {TouchEvent} event タッチイベント
+ * @returns {void}
+ */
+function handleReaderTouchStart(event) {
+  if (state.currentView !== "reader" || !state.currentPdf || event.touches.length !== 2) {
+    return;
+  }
+
+  event.preventDefault();
+  beginReaderPinch(event.touches);
+}
+
+/**
+ * @brief ピンチズーム中のズーム更新を処理する
+ * @param {TouchEvent} event タッチイベント
+ * @returns {void}
+ */
+function handleReaderTouchMove(event) {
+  if (!state.readerPinchSession || event.touches.length !== 2) {
+    return;
+  }
+
+  event.preventDefault();
+  const nextZoom = clamp(
+    Number(((state.readerPinchSession.startZoom * getTouchDistance(event.touches)) / state.readerPinchSession.startDistance).toFixed(3)),
+    READER_ZOOM.min,
+    READER_ZOOM.max,
+  );
+
+  if (nextZoom === state.readerPinchSession.lastAppliedZoom) {
+    return;
+  }
+
+  state.readerPinchSession.lastAppliedZoom = nextZoom;
+  queueReaderPinchZoom(nextZoom, createReaderAnchorFromTouches(event.touches));
+}
+
+/**
+ * @brief ピンチズームの終了と継続判定を処理する
+ * @param {TouchEvent} event タッチイベント
+ * @returns {void}
+ */
+function handleReaderTouchEnd(event) {
+  if (!state.readerPinchSession) {
+    return;
+  }
+
+  if (event.touches.length === 2) {
+    beginReaderPinch(event.touches);
+    return;
+  }
+
+  cancelReaderPinch();
+}
+
+/**
+ * @brief ピンチズーム要求を直列化して反映する
+ * @param {number} nextZoom 次のズーム倍率
+ * @param {{centerX:number, centerY:number, width:number, height:number}} anchor 基準位置
+ * @returns {void}
+ */
+function queueReaderPinchZoom(nextZoom, anchor) {
+  if (!state.readerPinchSession) {
+    return;
+  }
+
+  state.readerPinchSession.pendingZoom = nextZoom;
+  state.readerPinchSession.pendingAnchor = anchor;
+  if (!state.readerPinchSession.rendering) {
+    void flushReaderPinchZoom();
+  }
+}
+
+/**
+ * @brief 保留中のピンチズームを順番に再描画する
+ * @returns {Promise<void>}
+ */
+async function flushReaderPinchZoom() {
+  const session = state.readerPinchSession;
+  if (!session || session.rendering || session.pendingZoom == null || !session.pendingAnchor) {
+    return;
+  }
+
+  const { pendingZoom, pendingAnchor } = session;
+  session.pendingZoom = null;
+  session.pendingAnchor = null;
+
+  if (pendingZoom === state.readerZoom) {
+    return;
+  }
+
+  session.rendering = true;
+  state.readerZoom = pendingZoom;
+  applyReaderInteractionState();
+
+  try {
+    await rerenderReaderWithAnchor(pendingAnchor);
+  } finally {
+    if (state.readerPinchSession === session) {
+      session.rendering = false;
+      if (session.pendingZoom != null && session.pendingAnchor) {
+        void flushReaderPinchZoom();
+      }
+    }
+  }
+}
+
+/**
  * @brief ズーム変更後にスクロール位置を補正しながら再描画する
  * @param {{centerX:number, centerY:number, width:number, height:number}} anchor 再描画前の基準点
  * @returns {Promise<void>}
@@ -938,7 +1117,12 @@ async function rerenderReaderWithAnchor(anchor) {
  * @returns {void}
  */
 function handleReaderPointerDown(event) {
-  if (event.button !== 0 || state.currentView !== "reader" || state.readerZoom <= READER_ZOOM.min) {
+  if (
+    event.button !== 0
+    || state.currentView !== "reader"
+    || state.readerZoom <= READER_ZOOM.min
+    || state.readerPinchSession
+  ) {
     return;
   }
 
@@ -965,7 +1149,7 @@ function handleReaderPointerDown(event) {
  * @returns {void}
  */
 function handleReaderPointerMove(event) {
-  if (!state.readerPanSession || state.readerPanSession.pointerId !== event.pointerId) {
+  if (!state.readerPanSession || state.readerPanSession.pointerId !== event.pointerId || state.readerPinchSession) {
     return;
   }
 
@@ -1016,6 +1200,14 @@ function cancelReaderPan() {
 
   state.readerPanSession = null;
   applyReaderInteractionState();
+}
+
+/**
+ * @brief 進行中のピンチセッションを解除する
+ * @returns {void}
+ */
+function cancelReaderPinch() {
+  state.readerPinchSession = null;
 }
 
 function syncScrollPageIndicator() {
