@@ -78,6 +78,8 @@ const elements = {
   toggleAutoScrollButton: document.querySelector("#toggle-auto-scroll-button"),
   videoUrlInput: document.querySelector("#video-url-input"),
   purchaseUrlInput: document.querySelector("#purchase-url-input"),
+  pdfPathInput: document.querySelector("#pdf-path-input"),
+  copyPdfPathButton: document.querySelector("#copy-pdf-path-button"),
   touchZoneLeft: document.querySelector("#touch-zone-left"),
   touchZoneRight: document.querySelector("#touch-zone-right"),
   modeButtons: Array.from(document.querySelectorAll(".segmented-control__button[data-mode]")),
@@ -94,6 +96,7 @@ async function initialize() {
   applyView(state.currentView);
   initializeHistoryState();
   updateStatusLabels();
+  syncPdfPathControl();
   syncUrlControls();
   renderLibrary();
   await restoreRootHandle();
@@ -114,6 +117,7 @@ function setupEvents() {
   elements.videoUrlInput.addEventListener("change", handleUrlInputCommit);
   elements.purchaseUrlInput.addEventListener("input", handleUrlInputChange);
   elements.purchaseUrlInput.addEventListener("change", handleUrlInputCommit);
+  elements.copyPdfPathButton.addEventListener("click", copyPdfPath);
   document.addEventListener("pointerdown", handleDocumentPointerDown);
   elements.touchZoneLeft.addEventListener("click", () => changePage(-1));
   elements.touchZoneRight.addEventListener("click", () => changePage(1));
@@ -563,6 +567,7 @@ async function openScore(score, options = {}) {
   elements.readerViewport.classList.remove("is-hidden");
   elements.videoUrlInput.value = getScoreMeta(score).videoUrl ?? "";
   elements.purchaseUrlInput.value = getScoreMeta(score).purchaseUrl ?? "";
+  syncPdfPathControl();
   syncUrlControls();
 
   try {
@@ -1141,6 +1146,53 @@ function syncUrlControls() {
   elements.quickOpenVideoButton.disabled = !hasVideoUrl;
 }
 
+/**
+ * @brief 現在の楽譜パス表示を同期する
+ * @returns {void}
+ */
+function syncPdfPathControl() {
+  const pdfPath = getCurrentScorePdfPath();
+  elements.pdfPathInput.value = pdfPath;
+  elements.copyPdfPathButton.disabled = !pdfPath;
+  elements.copyPdfPathButton.textContent = "コピー";
+}
+
+/**
+ * @brief 現在の楽譜パスをクリップボードへコピーする
+ * @returns {Promise<void>}
+ */
+async function copyPdfPath() {
+  const pdfPath = getCurrentScorePdfPath();
+  if (!pdfPath) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(pdfPath);
+    elements.copyPdfPathButton.textContent = "コピー済み";
+    window.setTimeout(() => {
+      elements.copyPdfPathButton.textContent = "コピー";
+    }, 1400);
+  } catch (error) {
+    console.error("PDF パスのコピーに失敗しました", error);
+    alert("PDF パスのコピーに失敗しました。");
+  }
+}
+
+/**
+ * @brief 現在の楽譜に対応する表示用パスを返す
+ * @returns {string}
+ */
+function getCurrentScorePdfPath() {
+  if (!state.currentScore) {
+    return "";
+  }
+
+  const rootName = state.libraryRootHandle?.name;
+  const relativePath = state.currentScore.pathSegments.join("\\");
+  return rootName ? `${rootName}\\${relativePath}` : relativePath;
+}
+
 function openVideoUrl() {
   const url = elements.videoUrlInput.value.trim();
   if (!url) {
@@ -1249,6 +1301,7 @@ function navigateToLibrary(options = {}) {
   state.currentScore = null;
   state.currentPdf = null;
   resetReaderZoom();
+  syncPdfPathControl();
   renderLibrary();
   applyView("library");
   syncHistoryState(options);
@@ -1428,6 +1481,9 @@ initialize();
  * @property {FileSystemFileHandle} fileHandle ファイルハンドル
  * @property {number | null} pageCount ページ数
  */
+
+
+
 
 
 

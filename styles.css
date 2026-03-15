@@ -522,6 +522,21 @@ code {
   color: var(--text-strong);
 }
 
+.field--copy {
+  margin-top: 12px;
+}
+
+.copy-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.copy-field input[readonly] {
+  background: var(--surface-soft);
+  color: var(--text);
+}
 .field input::placeholder {
   color: var(--text-subtle);
 }
@@ -694,6 +709,10 @@ code {
     grid-template-columns: 1fr;
   }
 
+  .copy-field {
+    grid-template-columns: 1fr;
+  }
+
   .reader-pages,
   .reader-pages[data-mode="spread"],
   .reader-pages[data-mode="scroll"][data-scroll-direction="vertical"] {
@@ -759,3 +778,4 @@ code {
     width: calc(100vw - 20px);
   }
 }
+
