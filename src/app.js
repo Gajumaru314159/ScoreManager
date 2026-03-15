@@ -1131,6 +1131,9 @@ async function saveCurrentScoreUrls() {
   };
 
   await writeMetadata();
+  if (state.currentView === "library") {
+    renderLibrary();
+  }
 }
 
 function syncUrlControls() {
@@ -1246,6 +1249,7 @@ function navigateToLibrary(options = {}) {
   state.currentScore = null;
   state.currentPdf = null;
   resetReaderZoom();
+  renderLibrary();
   applyView("library");
   syncHistoryState(options);
 }
