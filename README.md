@@ -18,7 +18,15 @@
 - 現在カテゴリなどの軽量状態: ブラウザの `localStorage`
 - ルートフォルダ再接続用: ブラウザの `IndexedDB`
 
-## 起動方法
+## GitHub Pages
+
+- 公開 URL: `https://gajumaru314159.github.io/ScoreManager/`
+- `main` ブランチへ push すると、GitHub Actions で自動デプロイされます
+- 初回のみ GitHub リポジトリの Settings > Pages で Build and deployment の Source を `GitHub Actions` に設定してください
+
+GitHub Pages は `https` 配信のため、Chromium 系ブラウザで File System Access API を利用できます。
+
+## ローカル起動方法
 
 ```powershell
 Set-Location "D:\My\Productions\AI\ScoreManager"
@@ -32,4 +40,5 @@ node server.js
 - Chromium 系ブラウザが必要です
 - ルートフォルダには読み書き権限が必要です
 - `pdf.js` は CDN から読み込んでいます
+- GitHub Pages 版でも、初回に楽譜フォルダの選択と権限付与が必要です
 - 詳細仕様は [docs/specification.md](./docs/specification.md) を参照してください
