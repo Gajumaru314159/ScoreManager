@@ -1,8 +1,9 @@
 import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/build/pdf.mjs";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/build/pdf.worker.mjs";
+const PDFJS_WORKER_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/build/pdf.worker.mjs";
+const PDFJS_CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.3.136/cmaps/";
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
 const APP_DATA_FILE_NAME = ".score-manager-data.json";
 const ROOT_HANDLE_DB_NAME = "score-manager-db";
 const ROOT_HANDLE_STORE_NAME = "handles";
@@ -572,7 +573,11 @@ async function openScore(score, options = {}) {
 
   try {
     const file = await score.fileHandle.getFile();
-    state.currentPdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    state.currentPdf = await pdfjsLib.getDocument({
+      data: await file.arrayBuffer(),
+      cMapUrl: PDFJS_CMAP_URL,
+      cMapPacked: true,
+    }).promise;
     score.pageCount = state.currentPdf.numPages;
     applyView("reader");
     syncHistoryState({ replaceHistory, skipHistory });
