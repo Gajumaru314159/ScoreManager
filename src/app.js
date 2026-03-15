@@ -696,10 +696,9 @@ function getReaderLayoutMetrics() {
     (Number.parseFloat(pagesStyle.paddingTop) || 0) +
     (Number.parseFloat(pagesStyle.paddingBottom) || 0);
   const columnGap = Number.parseFloat(pagesStyle.columnGap || pagesStyle.gap) || 0;
-  const topbarHeight = 24;
 
   return {
-    availableHeight: Math.max(viewportHeight - paddingBlock - topbarHeight, 180),
+    availableHeight: Math.max(viewportHeight - paddingBlock, 180),
     availableWidth: Math.max(viewportWidth - paddingInline, 220),
     columnGap,
   };
@@ -1486,6 +1485,7 @@ initialize();
  * @property {FileSystemFileHandle} fileHandle ファイルハンドル
  * @property {number | null} pageCount ページ数
  */
+
 
 
 

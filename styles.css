@@ -593,12 +593,12 @@ code {
 
 .reader-pages {
   min-height: 100%;
-  padding: 24px;
+  padding: 8px 16px 8px;
   display: grid;
   justify-content: center;
   justify-items: center;
   align-content: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .reader-pages[data-mode="single"] {
@@ -612,8 +612,8 @@ code {
 .reader-pages[data-mode="scroll"][data-scroll-direction="vertical"] {
   grid-template-columns: auto;
   align-content: start;
-  padding-top: 84px;
-  padding-bottom: 36px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .reader-pages[data-mode="scroll"][data-scroll-direction="horizontal"] {
@@ -621,9 +621,9 @@ code {
   min-height: 100%;
   grid-auto-flow: column;
   grid-auto-columns: max-content;
-  align-content: center;
+  align-content: start;
   justify-content: start;
-  padding-right: 84px;
+  padding-right: 16px;
 }
 
 .reader-sheet {
@@ -778,4 +778,7 @@ code {
     width: calc(100vw - 20px);
   }
 }
+
+
+
 
