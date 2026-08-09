@@ -10,6 +10,9 @@ const ROOT_HANDLE_STORE_NAME = "handles";
 const ROOT_HANDLE_KEY = "library-root";
 const STORAGE_KEYS = {
   currentFolderPath: "score-manager.current-folder-path.v2",
+  currentScorePath: "score-manager.current-score-path.v1",
+  readerPage: "score-manager.reader-page.v1",
+  readerMode: "score-manager.reader-mode.v1",
   view: "score-manager.view.v2",
   libraryColumns: "score-manager.library-columns.v1",
   libraryScrollTop: "score-manager.library-scroll-top.v1",
@@ -30,8 +33,8 @@ const state = {
   currentFolderPath: loadCurrentFolderPath(),
   currentScore: null,
   currentPdf: null,
-  currentPage: 1,
-  mode: "single",
+  currentPage: loadReaderPage(),
+  mode: loadReaderMode(),
   singleLayout: loadSingleLayout(),
   singleWidthPercent: loadSingleWidthPercent(),
   scrollDirection: loadScrollDirection(),
@@ -221,6 +224,37 @@ function loadViewState() {
 }
 
 /**
+ * @brief 最後に開いていた楽譜の相対パスを localStorage から読み込む
+ * @returns {string[] | null}
+ */
+function loadCurrentScorePath() {
+  try {
+    const value = JSON.parse(localStorage.getItem(STORAGE_KEYS.currentScorePath) ?? "null");
+    return Array.isArray(value) && value.every((segment) => typeof segment === "string") ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @brief 最後に表示していたページ番号を localStorage から読み込む
+ * @returns {number}
+ */
+function loadReaderPage() {
+  const value = Number(localStorage.getItem(STORAGE_KEYS.readerPage) ?? 1);
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+/**
+ * @brief 最後に使用していた表示モードを localStorage から読み込む
+ * @returns {"single" | "spread" | "scroll"}
+ */
+function loadReaderMode() {
+  const value = localStorage.getItem(STORAGE_KEYS.readerMode);
+  return value === "spread" || value === "scroll" ? value : "single";
+}
+
+/**
  * @brief 本棚の列数を localStorage から読み込む
  * @returns {2 | 3 | 4 | 5}
  */
@@ -255,6 +289,18 @@ function persistCurrentFolderPath() {
 
 function persistViewState(view) {
   localStorage.setItem(STORAGE_KEYS.view, view);
+}
+
+/**
+ * @brief 現在の楽譜閲覧状態を localStorage に保存する
+ * @returns {void}
+ */
+function persistReaderState() {
+  if (state.currentScore) {
+    localStorage.setItem(STORAGE_KEYS.currentScorePath, JSON.stringify(state.currentScore.pathSegments));
+  }
+  localStorage.setItem(STORAGE_KEYS.readerPage, String(state.currentPage));
+  localStorage.setItem(STORAGE_KEYS.readerMode, state.mode);
 }
 
 /**
@@ -332,9 +378,44 @@ async function restoreRootHandle() {
 
   try {
     await loadLibraryFromHandle(handle);
+    await restoreCurrentScore();
   } catch (error) {
     console.warn("保存済みルートフォルダの復元に失敗しました", error);
   }
+}
+
+/**
+ * @brief リロード前に開いていた楽譜を復元する
+ * @returns {Promise<void>}
+ */
+async function restoreCurrentScore() {
+  if (state.currentView !== "reader") {
+    return;
+  }
+
+  const historyState = window.history.state;
+  const historyScorePath = historyState?.view === "reader" && Array.isArray(historyState.scorePath)
+    ? historyState.scorePath
+    : null;
+  const scorePath = loadCurrentScorePath() ?? historyScorePath;
+  const score = resolveScorePath(scorePath);
+  if (!score) {
+    navigateToLibrary({ replaceHistory: true });
+    return;
+  }
+
+  const savedPage = localStorage.getItem(STORAGE_KEYS.readerPage) === null
+    ? Number(historyState?.readerPage) || 1
+    : loadReaderPage();
+  const savedMode = localStorage.getItem(STORAGE_KEYS.readerMode) === null
+    ? historyState?.mode
+    : loadReaderMode();
+
+  await openScore(score, {
+    replaceHistory: true,
+    page: savedPage,
+    mode: savedMode === "spread" || savedMode === "scroll" ? savedMode : "single",
+  });
 }
 
 async function handlePickDirectory() {
@@ -595,9 +676,12 @@ async function openScore(score, options = {}) {
       cMapPacked: true,
     }).promise;
     score.pageCount = state.currentPdf.numPages;
+    state.currentPage = clamp(state.currentPage, 1, state.currentPdf.numPages);
+    persistReaderState();
     applyView("reader");
     syncHistoryState({ replaceHistory, skipHistory });
     await renderReader();
+    persistReaderState();
   } catch (error) {
     console.error(error);
     alert("PDF の読み込みに失敗しました。");
@@ -786,6 +870,7 @@ function switchMode(mode) {
   }
 
   state.mode = mode;
+  persistReaderState();
   stopAutoScroll();
   void renderReader();
 }
@@ -810,6 +895,7 @@ function changePage(delta) {
   }
 
   state.currentPage = nextPage;
+  persistReaderState();
   void renderReader();
 }
 
@@ -839,6 +925,7 @@ function jumpToReaderBoundary(direction) {
   }
 
   state.currentPage = targetPage;
+  persistReaderState();
   void renderReader();
 }
 function handleKeyboardInput(event) {
@@ -1235,8 +1322,12 @@ function syncScrollPageIndicator() {
   for (const sheet of sheets) {
     const sheetEnd = isHorizontal ? sheet.offsetLeft + sheet.clientWidth : sheet.offsetTop + sheet.clientHeight;
     if (sheetEnd > threshold) {
-      state.currentPage = Number(sheet.dataset.pageNumber);
-      updatePageIndicator();
+      const visiblePage = Number(sheet.dataset.pageNumber);
+      if (visiblePage !== state.currentPage) {
+        state.currentPage = visiblePage;
+        persistReaderState();
+        updatePageIndicator();
+      }
       return;
     }
   }
@@ -1472,7 +1563,11 @@ function createHistorySnapshot() {
  * @returns {void}
  */
 function initializeHistoryState() {
-  window.history.replaceState(createHistorySnapshot(), "");
+  const existingState = window.history.state;
+  const reloadSnapshot = existingState?.view === "reader" && Array.isArray(existingState.scorePath)
+    ? existingState
+    : createHistorySnapshot();
+  window.history.replaceState(reloadSnapshot, "");
   state.historyReady = true;
 }
 

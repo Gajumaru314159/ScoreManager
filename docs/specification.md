@@ -51,7 +51,7 @@
 - ライブラリのフォルダ選択には File System Access API を使用する
 - 対応ブラウザは Chromium 系ブラウザを主対象とする
 - 楽譜ごとの基本データはルートフォルダ内の `.score-manager-data.json` に保存する
-- current folder path など軽量状態は `localStorage` に保存する
+- current folder path、最後に開いた楽譜の相対パス、表示中ページ、表示モードなどの軽量状態は `localStorage` に保存する
 - ルートフォルダへの再接続用ハンドルは `IndexedDB` に保存する
 
 ## 4. 基本設計
@@ -79,7 +79,7 @@ ScoreManagerData {
 ### 4.3 保存場所
 
 - `.score-manager-data.json`: ルートフォルダ内
-- `localStorage`: 現在開いているカテゴリ、表示中ページなど
+- `localStorage`: 現在開いているカテゴリ、最後に開いた楽譜の相対パス、表示中ページ、表示モードなど
 - `IndexedDB`: ルートディレクトリハンドル
 
 ## 5. 詳細設計
