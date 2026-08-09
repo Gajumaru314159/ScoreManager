@@ -539,11 +539,22 @@ function createShelfCard(entry) {
 
   if (entry.type === "folder") {
     meta.textContent = `${entry.folders.length} folders / ${entry.scores.length} scores`;
-  } else if (getScoreMeta(entry).videoUrl) {
-    const badge = document.createElement("span");
-    badge.className = "shelf-card__badge";
-    badge.textContent = "動画あり";
-    meta.append(badge);
+  } else {
+    const scoreMeta = getScoreMeta(entry);
+
+    if (scoreMeta.videoUrl) {
+      const videoBadge = document.createElement("span");
+      videoBadge.className = "shelf-card__badge";
+      videoBadge.textContent = "動画あり";
+      meta.append(videoBadge);
+    }
+
+    if (scoreMeta.purchaseUrl) {
+      const purchaseBadge = document.createElement("span");
+      purchaseBadge.className = "shelf-card__badge shelf-card__badge--purchase";
+      purchaseBadge.textContent = "購入元あり";
+      meta.append(purchaseBadge);
+    }
   }
   body.append(title, meta);
   card.append(body);
