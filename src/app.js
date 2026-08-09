@@ -633,7 +633,7 @@ function createShelfCard(entry) {
     if (scoreMeta.purchaseUrl) {
       const purchaseBadge = document.createElement("span");
       purchaseBadge.className = "shelf-card__badge shelf-card__badge--purchase";
-      purchaseBadge.textContent = "購入元あり";
+      purchaseBadge.textContent = "入手元あり";
       meta.append(purchaseBadge);
     }
   }
